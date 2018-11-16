@@ -10,5 +10,6 @@ module JuMPUtil
     export h!
     export j! ## TODO
     export c! ## TODO
-    export check  ## TODO
+    export check_unconstr
+    export check_constr  ## TODO
 end # module

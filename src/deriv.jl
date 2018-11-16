@@ -1,4 +1,5 @@
 using JuMP
+using MathProgBase
 using SparseArrays
 
 ## =============================================================================
@@ -73,18 +74,22 @@ function c!(c::Array{Float64,1}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
     MathProgBase.eval_g(model, c, x)
 end
 
+
+## =============================================================================
+## check optimality conditions
+## =============================================================================
 """
 ...
-## `check`: checks fist and second order conditions for model `m`
+## `check`: checks fist and second order conditions for `model`
 ### arguments:
 - `x::Array{Float64,1}`: point to evaluate
 - `m::JuMP.NLPEvaluator`: initialized model to evaluate
 ...
 """
 ## TODO
-function check(x::Array{Float64,1}, model::JuMP.NLPEvaluator)
+function check_constr(x::Array{Float64,1}, model::JuMP.NLPEvaluator)
     ## setup
-    n = length(x)
+    n = MathProgBase.numvar(model.m)
     m = MathProgBase.numconstr(model.m)
 
     ## first order necessary
@@ -101,3 +106,22 @@ function check(x::Array{Float64,1}, model::JuMP.NLPEvaluator)
     return norm(fon), complementarity
 end
 
+function check_unconstr(x::Array{Float64,1}, model::JuMP.NLPEvaluator; tol=1e-6)
+    ## setup
+    n = MathProgBase.numvar(model.m)
+    m = MathProgBase.numconstr(model.m)
+
+    ## first order necessary
+    g = zeros(n)
+    g!(g, x, model=model)
+    norm_g = norm(g)
+    @assert(norm_g <= tol)
+
+    ## second order sufficent
+    H = spzeros(n, n)
+    h!(H, x, model=model)
+    eigs = eigvals(Matrix(H))
+    @assert(minimum(eigs) > 0.0)
+
+    return norm_g, eigs
+end
