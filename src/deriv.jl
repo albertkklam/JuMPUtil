@@ -1,5 +1,6 @@
 using JuMP
 using MathProgBase
+using LinearAlgebra
 using SparseArrays
 
 ## =============================================================================
