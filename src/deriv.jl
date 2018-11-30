@@ -29,8 +29,12 @@ function populate_hess_sparse!(H::SparseMatrixCSC{Float64,Int64},
                                i::Array{Int64,1}, j::Array{Int64,1},
                                h::Array{Float64,1}, n::Int64)
     for elem in zip(i, j, h)
-        H[elem[1], elem[2]] = elem[3]
-        H[elem[2], elem[1]] = elem[3]
+       if elem[1] != elem[2]
+           H[elem[1], elem[2]] += elem[3]
+           H[elem[2], elem[1]] += elem[3]
+       else
+           H[elem[1], elem[2]] += elem[3]
+       end
     end
 end
 
@@ -82,16 +86,29 @@ end
 """
 ...
 ## `check`: checks fist and second order conditions for `model`
+## reference: https://www.mathworks.com/help/optim/ug/constrained-nonlinear-optimization-algorithms.html
+              http://www.cs.nthu.edu.tw/~cherung/teaching/2011cs5321/handout7.pdf
 ### arguments:
 - `x::Array{Float64,1}`: point to evaluate
 - `m::JuMP.NLPEvaluator`: initialized model to evaluate
 ...
 """
 ## TODO
-function check_constr(x::Array{Float64,1}, model::JuMP.NLPEvaluator)
+function check_eqconstr(x::Array{Float64,1}, model::JuMP.NLPEvaluator)
     ## setup
     n = MathProgBase.numvar(model.m)
     m = MathProgBase.numconstr(model.m)
+
+    ## get constraint names and multipliers
+    keys = model.m.objDict.keys
+    idx = [isassigned(keys, i) for i = 1:length(keys)]
+    keys = keys[idx]
+    non_vars = filter(x -> x == false, keys[(Symbol(e) in Symbol.(model.m.colNames)) for e in keys])
+    var_idx = [(Symbol(e) in Symbol.(model.m.colNames)) for e in keys]
+    con_idx = .~var_idx
+    cons = keys[con_idx]
+    lams = [getdual(model.m[cons[i]]) for i = 1:length(cons)]
+    A = cons[lams != 0.0]
 
     ## first order necessary
     lam_star = getdual(model[:line_limit])
@@ -102,6 +119,7 @@ function check_constr(x::Array{Float64,1}, model::JuMP.NLPEvaluator)
     complementarity = lam_star .* con
 
     ## second order
+
     hess = spzeros()
 
     return norm(fon), complementarity
