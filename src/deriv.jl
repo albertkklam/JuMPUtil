@@ -27,7 +27,7 @@ function populate_hess_sparse(i::Array{Int64,1}, j::Array{Int64,1},
 end
 function populate_hess_sparse!(H::SparseMatrixCSC{Float64,Int64},
                                i::Array{Int64,1}, j::Array{Int64,1},
-                               h::Array{Float64,1}, n::Int64)
+                               h::Array{Float64,1})
     for elem in zip(i, j, h)
        if elem[1] != elem[2]
            H[elem[1], elem[2]] += elem[3]
@@ -38,6 +38,13 @@ function populate_hess_sparse!(H::SparseMatrixCSC{Float64,Int64},
     end
 end
 
+function populate_jac_sparse!(J::SparseMatrixCSC{Float64,Int64},
+                              i::Array{Int64,1}, j::Array{Int64,1},
+                              jj::Array{Float64,1})
+    for elem in zip(i, j, jj)
+        J[elem[1], elem[2]] = elem[3]
+    end
+end
 """
 ...
 ## get objective value (`f!`), gradient (`g!`), or hessian (`h!`) of model `m`
@@ -57,20 +64,20 @@ function g!(g::Array{Float64,1}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
 end
 function h!(H::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator,
             lam::Array{Float64,1}=[0.0])
-    n = size(H)[1]
     ij_hess = MathProgBase.hesslag_structure(model)
     h = ones(length(ij_hess[1]))
     MathProgBase.eval_hesslag(model, h, x, 1.0, lam)
-    H = populate_hess_sparse!(H, ij_hess[1], ij_hess[2], h, n)
+    H = populate_hess_sparse!(H, ij_hess[1], ij_hess[2], h)
 end
 ## TODO
-function j!(j::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
+function j!(J::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
     m = MathProgBase.numconstr(model.m)
     n = MathProgBase.numvar(model.m)
+    @assert(size(J) == (m,n))
     ij_jac = MathProgBase.jac_structure(model)
     j = ones(length(ij_jac[1]))
     MathProgBase.eval_jac_g(model, j, x)
-    j[:,:] = sparse(ij_jac[1], ij_jac[2], j, m, n)
+    populate_jac_sparse!(J, ij_jac[1], ij_jac[2], j)
 end
 ## TODO
 function c!(c::Array{Float64,1}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
