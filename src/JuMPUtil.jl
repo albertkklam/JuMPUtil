@@ -12,4 +12,7 @@ module JuMPUtil
     export c! ## TODO
     export check_unconstr
     export check_constr  ## TODO
+
+    include("util.jl")
+    export inertia
 end # module
