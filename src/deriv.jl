@@ -47,29 +47,74 @@ function populate_jac_sparse!(J::SparseMatrixCSC{Float64,Int64},
 end
 """
 ...
-## get objective value (`f!`), gradient (`g!`), or hessian (`h!`) of model `m`
-   OR get jacobian (`j!`) of model constraints or constraint values
+## `f!`: evalue model objective function
 ### arguments:
-- `x::Array{Float64,1}`: point to evaluate
-- `g::Array{Float64,1}`: placeholder for gradient
-- `H::SparseMatrixCSC{Float64,Int64}`: placeholder for hessian
-- `model::JuMP.NLPEvaluator`: initialized model to evaluate
+    * `x::Array{Float64,1}`: point to evaluate
+    * `model::JuMP.NLPEvaluator`: initialized model to evaluate
 ...
 """
 function f!(x::Array{Float64,1}; model::JuMP.NLPEvaluator)
     return MathProgBase.eval_f(model, x)
 end
+
+"""
+...
+## `g!`: evaluate gradient of model objective function in-place
+### arguments:
+    * `x::Array{Float64,1}`: point to evaluate
+    * `g::Array{Float64,1}`: placeholder for gradient
+    * `model::JuMP.NLPEvaluator`: initialized model to evaluate
+...
+"""
 function g!(g::Array{Float64,1}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
     MathProgBase.eval_grad_f(model, g, x)
 end
-function h!(H::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator,
+
+"""
+...
+## `H!`: evaluate Hessian of model objective function in-place
+### arguments:
+    * `x::Array{Float64,1}`: point to evaluate
+    * `H::SparseMatrixCSC{Float64,Int64}`: placeholder for hessian
+    * `model::JuMP.NLPEvaluator`: initialized model to evaluate
+...
+"""
+function H!(H::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator,
             lam::Array{Float64,1}=[0.0])
     ij_hess = MathProgBase.hesslag_structure(model)
     h = ones(length(ij_hess[1]))
     MathProgBase.eval_hesslag(model, h, x, 1.0, lam)
     H = populate_hess_sparse!(H, ij_hess[1], ij_hess[2], h)
 end
-## TODO
+
+## TODO: sum of hessians of constraints; ie multiple constraints...
+"""
+...
+## `h!`: evaluate Hessian of model constraint function(s??) in-place
+### arguments:
+    * `x::Array{Float64,1}`: point to evaluate
+    * `H::SparseMatrixCSC{Float64,Int64}`: placeholder for hessian
+    * `model::JuMP.NLPEvaluator`: initialized model to evaluate
+...
+"""
+function h!(H::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator,
+            lam::Array{Float64,1}=[1.0])
+    ij_hess = MathProgBase.hesslag_structure(model)
+    h = ones(length(ij_hess[1]))
+    MathProgBase.eval_hesslag(model, h, x, 0.0, lam)
+    H = populate_hess_sparse!(H, ij_hess[1], ij_hess[2], h)
+end
+
+## TODO: multiple constraints...
+"""
+...
+## `j!`: evaluate Jacobian of model constraint function(s??) in-place
+### arguments:
+    * `x::Array{Float64,1}`: point to evaluate
+    * `J::SparseMatrixCSC{Float64,Int64}`: placeholder for Jacobian
+    * `model::JuMP.NLPEvaluator`: initialized model to evaluate
+...
+"""
 function j!(J::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
     m = MathProgBase.numconstr(model.m)
     n = MathProgBase.numvar(model.m)
@@ -79,7 +124,7 @@ function j!(J::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.
     MathProgBase.eval_jac_g(model, j, x)
     populate_jac_sparse!(J, ij_jac[1], ij_jac[2], j)
 end
-## TODO
+## TODO: multiple constraints
 function c!(c::Array{Float64,1}, x::Array{Float64,1}; model::JuMP.NLPEvaluator)
     # m = MathProgBase.numconstr(model.m)
     # con = fill(NaN, m)

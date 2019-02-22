@@ -7,12 +7,16 @@ module JuMPUtil
     export populate_hess_sparse!
     export f!
     export g!
-    export h!
-    export j! ## TODO
-    export c! ## TODO
+    export H!
+    export h! ## TODO: multiple constraints
+    export j! ## TODO: multiple constraints
+    export c! ## TODO: multiple constraints
     export check_unconstr
     export check_constr  ## TODO
 
     include("util.jl")
     export inertia
+    export setup
+    export getvalue  # extend
+    export setvalue  # extend
 end # module

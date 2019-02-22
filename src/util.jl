@@ -1,10 +1,36 @@
 using LinearAlgebra
 using SparseArrays
+using JuMP
 
 
 ## =============================================================================
 ## helper functions
 ## =============================================================================
+"""
+## `setup`: initialize JuMP model `m` for derivative queries
+"""
+function setup(m::Model)
+    d = JuMP.NLPEvaluator(m)
+    MathProgBase.initialize(d, [:Grad, :Jac, :Hess, :ExprGraph])
+    return d
+end
+
+
+"""
+## `getvalue`: extend JuMP's `getvalue` to `Float64`s
+"""
+function JuMP.getvalue(f::Float64)
+    return f
+end
+
+"""
+## `setvalue`: extend JuMP's `setvalue` to `Float64`s
+"""
+function JuMP.setvalue(f::Float64, v::Float64)
+    f = copy(v)
+    # return f
+end
+
 
 """
 ...
