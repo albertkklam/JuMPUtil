@@ -37,10 +37,10 @@ function populate_hess_sparse!(H::SparseMatrixCSC{Float64,Int64},
                                h::Array{Float64,1})
     for elem in zip(i, j, h)
        if elem[1] != elem[2]
-           H[elem[1], elem[2]] += elem[3]
-           H[elem[2], elem[1]] += elem[3]
+           H[elem[1], elem[2]] = elem[3]
+           H[elem[2], elem[1]] = elem[3]
        else
-           H[elem[1], elem[2]] += elem[3]
+           H[elem[1], elem[2]] = elem[3]
        end
     end
 end
