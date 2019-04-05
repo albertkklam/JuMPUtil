@@ -13,35 +13,69 @@
 - `H::SparseMatrixCSC`: sparse, symmetric hessian
 ...
 """
-function populate_hess_sparse(i::Array{Int64,1}, j::Array{Int64,1},
-                              h::Array{Float64,1}, n::Int64)
-    ## build matrix; probably a better way to do this...
-    H = sparse([i;j], [j;i], [h;h], n, n, +)  ## NOTE: symmetrizing doubles the diagonal
-    H = H - Diagonal(H)/2.                    ## NOTE: required removal of 1/2 digonal
+function populate_hess_sparse(i::Array{Int64,1},
+                              j::Array{Int64,1},
+                              h::Array{Float64,1},
+                              n::Int64)
+    H = spzeros(n, n)
+    @simd for idx in eachindex(i)
+        ii = i[idx]; jj = j[idx]; hh = h[idx]
+        ## !! NOTE: UNSAFE ACCORDING TO DOCS; NEED TO FILTER (i,j) and (j,i) !!
+        if i[idx] != j[idx]
+           @inbounds @views H[ii, jj] += hh
+           @inbounds @views H[jj, ii] += hh
+        else
+           @inbounds @views H[ii, jj] += hh
+        end
+    end
     return H
 end
 
 """
 ...
-## `populate_hess_sparse!`: populates a sparse hessian from indices and values in-place
+## `populate_hess_sparse!`: populates a sparse hessian from indices and values in-place or calls `populate_hess_sparse` based on `structure` flag
 ### arguments:
 - `H::SparseMatrixCSC`: sparse, symmetric hessian
 - `i::Array{Int64,1}`: row indices
 - `j::Array{Int64,1}`: col indices
 - `h::Array{Int64,1}`: values s.t. h[1] = H[i[1], j[1]]
-- `n::Int64`: dimension of hessian
+- `structure::Int64`:
+    - `structure` = `0`: indicates that `H` is empty outside of indices defined by `i,j` and of appropriate dimension; method will overwrite the `i,j` element with zero and then populate with `h`. This is needed to address dupes.
+    - `structure` ≠ `0`: creates a sparse matrix of size `structure` × `structure`
 ...
 """
 function populate_hess_sparse!(H::SparseMatrixCSC{Float64,Int64},
-                               i::Array{Int64,1}, j::Array{Int64,1},
-                               h::Array{Float64,1})
-    for elem in zip(i, j, h)
-       if elem[1] != elem[2]
-           H[elem[1], elem[2]] = elem[3]
-           H[elem[2], elem[1]] = elem[3]
-       else
-           H[elem[1], elem[2]] = elem[3]
-       end
+                               i::Array{Int64,1},
+                               j::Array{Int64,1},
+                               h::Array{Float64,1},
+                               structure::Int64=0)
+    @assert(length(i) == length(j)); @assert(length(i) == length(h))
+    ## address structure
+    if structure != 0
+        ## `H` is "not fresh" outside of `i,j` elements; zero out `i,j` elements to be added to
+        return populate_hess_sparse(i, j, h, structure)
+    else
+        ## `H` is "fresh" outside of `i,j` elements; zero out `i,j` elements to be added to
+        @simd for idx in eachindex(i)
+            ii = i[idx]; jj = j[idx]
+            ## !! NOTE: UNSAFE ACCORDING TO DOCS; NEED TO FILTER (i,j) and (j,i) !!
+            if i[idx] != j[idx]
+               @inbounds @views H[ii, jj] = 0.0
+               @inbounds @views H[jj, ii] = 0.0
+            else
+               @inbounds @views H[ii, ii] = 0.0
+            end
+        end
+        ## populate elements
+        @simd for idx in eachindex(i)
+            ii = i[idx]; jj = j[idx]; hh = h[idx]
+            if i[idx] != j[idx]
+               @inbounds @views H[ii, jj] += hh
+               @inbounds @views H[jj, ii] += hh
+            else
+               @inbounds @views H[ii, ii] += hh
+            end
+        end
     end
 end
 
@@ -98,12 +132,13 @@ end
     * `[model::JuMP.NLPEvaluator]`: (kwarg) initialized model to evaluate
 ...
 """
-function H!(H::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1}; model::JuMP.NLPEvaluator,
-            lam::Array{Float64,1}=[0.0])
+function H!(H::SparseMatrixCSC{Float64,Int64}, x::Array{Float64,1};
+            model::JuMP.NLPEvaluator, structure::Int64=0)
+    m = MathProgBase.numconstr(model.m)
     ij_hess = MathProgBase.hesslag_structure(model)
     h = ones(length(ij_hess[1]))
-    MathProgBase.eval_hesslag(model, h, x, 1.0, lam)
-    H = populate_hess_sparse!(H, ij_hess[1], ij_hess[2], h)
+    MathProgBase.eval_hesslag(model, h, x, 1.0, zeros(m))
+    populate_hess_sparse!(H, ij_hess[1], ij_hess[2], h, structure)
 end
 
 ## TODO: sum of hessians of constraints; ie multiple constraints...
